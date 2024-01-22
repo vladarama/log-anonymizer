@@ -10,12 +10,14 @@ lookup_table = {}
 
 endpoint_pattern = r'\b[^\/\s]+\/(?![0-9])[^\/\s]+(?:\/(?![0-9])[^\/\s]+)?'
 ip_pattern = r'\b\d{1,3}(?:\.\d{1,3}){2,}\b'
-user_id_pattern = r'- ([a-zA-Z_\-][a-zA-Z0-9_\-]*)\s'
+timestamps = r'(\d{4}:\d{2}:\d{2}:\d{2})|(\d{2}:\d{2}:\d{2}[,\.]\d{3})'
+user_id_pattern = r'\s[a-z][a-z0-9]{4,19}\s'
 
 exclude_extensions = ['.gz', '.md5', '.sha1', '.sha256', '.zip']
 
 parser = argparse.ArgumentParser(description="Anonymize log files. Anonymized files and their lookup tables are storedd in the `anonymized-logs` folder")
 parser.add_argument('--ip', action='store_true', help='Only Anonymize IP Addresses')
+parser.add_argument('--timestamps', action='store_true', help='Only Anonymize IP Addresses')
 parser.add_argument('--endpoint', action='store_true', help='Only Anonymize Endpoints')
 parser.add_argument('--user', action='store_true', help='Only Anonymize User IDs')
 
@@ -50,23 +52,51 @@ def anonymize_ip(match):
         ip_parts = original_ip.split('.')
         anonymized_ip_parts = []
         for part in ip_parts:
-            anonymized_part = str(random.randint(0, 255))
+            anonymized_part = str(randomize_numbers(part, True))
             anonymized_ip_parts.append(anonymized_part)
         anonymized_ip = ".".join(anonymized_ip_parts)
         lookup_table[original_ip] = anonymized_ip
 
     return anonymized_ip
 
+def anonymize_timestamps(match):
+    original_ip = match.group(0)
+    if original_ip in lookup_table:
+        anonymized_ip = lookup_table[original_ip]
+    else:
+        ip_parts = original_ip.split(':')
+        anonymized_ip_parts = []
+        for part in ip_parts:
+            anonymized_part = str(randomize_numbers(part))
+            anonymized_ip_parts.append(anonymized_part)
+        anonymized_ip = ":".join(anonymized_ip_parts)
+        lookup_table[original_ip] = anonymized_ip
+
+    return anonymized_ip
+
 def anonymize_user_id(match):
-    original_user_id = match.group(1)
+    original_user_id = match.group(0)
     if original_user_id in lookup_table:
         anonymized_user_id = lookup_table[original_user_id]
     else:
         anonymized_user_id = namesgenerator.get_random_name()
         lookup_table[original_user_id] = anonymized_user_id
 
-    return '- ' + anonymized_user_id + ' ' 
+    return ' ' + anonymized_user_id + ' ' 
 
+def randomize_numbers(number, isIp = False):
+    num_len = len(str(number))
+    lower_bound = 10**(num_len - 1)
+    
+    if (isIp):
+        upper_bound = min(255, (10**num_len - 1))
+    else:
+        upper_bound = 10**num_len - 1
+
+    if num_len == 1:
+        lower_bound = 0
+
+    return random.randint(lower_bound, upper_bound)
 
 for filename in os.listdir(base_directory):
     if not filename.endswith(tuple(exclude_extensions)):
@@ -78,11 +108,13 @@ for filename in os.listdir(base_directory):
             for line in input_file:
                 if args.ip:
                     line = re.sub(ip_pattern, anonymize_ip, line)
+                if args.timestamps:
+                    line = re.sub(timestamps, anonymize_timestamps, line)
                 if args.endpoint:
                     line = re.sub(endpoint_pattern, anonymize_endpoint, line)
                 if args.user:
                     line = re.sub(user_id_pattern, anonymize_user_id, line)
-                if not (args.ip or args.endpoint or args.user):
+                if not (args.ip or args.timestamps or args.endpoint or args.user):
                     line = re.sub(ip_pattern, anonymize_ip, line)
                     line = re.sub(endpoint_pattern, anonymize_endpoint, line)
                     line = re.sub(user_id_pattern, anonymize_user_id, line)
@@ -94,4 +126,4 @@ for filename in os.listdir(base_directory):
                 lookup_file.write(f'{anonymized_endpoint} -> {original_endpoint}\n')
 
         print(f'Logs in {filename} anonymized and saved to {output_file_path}')
-        print(f'Lookup table for {filename} saved to {lookup_file_path}')
+        print(f'Lookup table for {filename} saved to {lookup_file_path} \n')
