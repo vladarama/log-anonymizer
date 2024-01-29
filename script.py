@@ -4,16 +4,25 @@ import re
 import namesgenerator
 import argparse
 
+# General Regex Patterns
 ip_pattern = r'\b\d{1,3}(?:\.\d{1,3}){2,}\b'
 timestamps_pattern = r'(\d{4}:\d{2}:\d{2}:\d{2})|(\d{2}:\d{2}:\d{2}[,\.]\d{3})'
-endpoint_pattern_general = r'\b[^\/\s]+\/(?![0-9])[^\/\s]+(?:\/(?![0-9])[^\/\s]+)?'
-user_id_pattern_general = r'\s[a-z][a-z0-9]{4,19}\s'
+endpoint_pattern = r'\b[^\/\s]+\/(?![0-9])[^\/\s]+(?:\/(?![0-9])[^\/\s]+)?'
+user_id_pattern = r'\s[a-z][a-z0-9]{4,19}\s'
+
+# Specific Regex Patterns
 httpd_pattern = r'\s*(\S+)\s*(\S*)\s*\-\s(\S+)\s\[(\S+\s*\S+)\]\s\"(\S+)\s+(\S+)\s(\S+)\"\s(\d+)\s(\S+)\s(\S+)\s\"(.*)\"'
 sshd_pattern = r'\[(\d.*)\]\s+(\S+)\s+(\S+)\s+(\S+)\s+((([A-Z]+)\sFROM\s+(.*))|(([A-Z]+))|((AUTH FAILURE)\sFROM\s(\S+)\s(.*))|((.+)\s+(\S+)\s+(\S+)\s+(\S+)))'
+ha_proxy_pattern = r'^(\w+ \d+ \S+) (\S+) (\S+)\[(\d+)\]: (\S+):(\d+) \[(\S+)\] (\S+) (\S+) (\S+) (\S+) (\S+) *(\S+) (\S+) (\S+)(?: (\S+) (\S+) \{([^}]*)\} \{([^}]*)\} "(\S+) ([^"]+) (\S+)")? *$'
 
-exclude_extensions = ['.gz', '.md5', '.sha1', '.sha256', '.zip']
+files_to_exclude = ['.gz', '.md5', '.sha1', '.sha256', '.zip']
 
 def anonymize_ip(match):
+    """
+    Takes a regex match, representing a line in any type of log file.
+    Returns an anonymized IP address.
+
+    """
     original_ip = match.group(0)
     if original_ip in lookup_table:
         anonymized_ip = lookup_table[original_ip]
@@ -28,7 +37,50 @@ def anonymize_ip(match):
 
     return anonymized_ip
 
+def anonymize_ip_ha(match):
+    """
+    Takes a regex match, representing a line in an HA Proxy log file.
+    Returns a line with all of the IP addresses and their ports anonymized.
+
+    """
+    original_ip = match.group(5)
+    original_port = match.group(6)
+
+    if original_ip in lookup_table:
+        anonymized_ip = lookup_table[original_ip]
+    else:
+        ip_parts = original_ip.split('.')
+        anonymized_ip_parts = [str(randomize_numbers(part, True)) for part in ip_parts]
+        anonymized_ip = ".".join(anonymized_ip_parts)
+        lookup_table[original_ip] = anonymized_ip
+
+    if original_port in lookup_table:
+        anonymized_port = lookup_table[original_port]
+    else:
+        anonymized_port = str(randomize_numbers(original_port, False))
+        lookup_table[original_port] = anonymized_port
+
+    return ''.join([match.string[:match.start(5)], anonymized_ip, match.string[match.end(5):match.start(6)], anonymized_port, match.string[match.end(6):]])
+
+def anonymize_ip_line(line, filename):
+    """
+    Takes a specific line from a file and its filename. 
+    Returns the line with all of the IP addresses anonymized.
+    
+    """
+    if 'ha' in filename:
+        line = re.sub(ha_proxy_pattern, anonymize_ip_ha, line)
+    else:
+        line = re.sub(ip_pattern, anonymize_ip, line)
+
+    return line.rstrip() + '\n'
+
 def anonymize_timestamps(match):
+    """
+    Takes a regex match, representing a line in any type of log file.
+    Returns an anonymized timestamp that has the same length as the original one.
+
+    """
     original_ip = match.group(0)
     if original_ip in lookup_table:
         anonymized_ip = lookup_table[original_ip]
@@ -44,6 +96,11 @@ def anonymize_timestamps(match):
     return anonymized_ip
 
 def anonymize_user_id_general(match):
+    """
+    Takes a regex match, representing a line in any type of log file.
+    Returns a randomly generated user id.
+
+    """
     original_user_id = match.group(0)
     if original_user_id in lookup_table:
         anonymized_user_id = lookup_table[original_user_id]
@@ -54,6 +111,11 @@ def anonymize_user_id_general(match):
     return ' ' + anonymized_user_id + ' ' 
 
 def anonymize_user_id_httpd_sshd(match):
+    """
+    Takes a regex match, representing a line in an HTTP or SSH log file.
+    Returns a line with all of the user information anonymized.
+
+    """
     original_user = match.group(3)
     if original_user == '-':
         return match.group(0)
@@ -65,17 +127,56 @@ def anonymize_user_id_httpd_sshd(match):
 
     return ''.join([match.string[:match.start(3)], anonymized_user, match.string[match.end(3):]])
 
+def anonymize_sensitive_info_ha(match):
+    """
+    Takes a regex match, representing a line in an HA Proxy log file.
+    Returns a line with all of the sensitive information anonymized.
+
+    """
+    # Validate that sensitive information is present
+    if match.group(18) == None or match.group(19) == None:
+        return match.group(0)
+
+    original_info1 = match.group(18)
+    original_info2 = match.group(19)
+
+    if original_info1 in lookup_table:
+        anonymized_info1 = lookup_table[original_info1]
+    else:
+        anonymized_info1 = namesgenerator.get_random_name()
+        lookup_table[original_info1] = anonymized_info1
+
+    if original_info2 in lookup_table:
+        anonymized_info2 = lookup_table[original_info2]
+    else:
+        anonymized_info2 = namesgenerator.get_random_name()
+        lookup_table[original_info2] = anonymized_info2
+
+    return ''.join([match.string[:match.start(18)], anonymized_info1, match.string[match.end(18):match.start(19)], anonymized_info2, match.string[match.end(19):]])
+
 def anonymize_user_line(line, filename):
+    """
+    Takes a specific line from a file and its filename. 
+    Returns the line with all of the user information and sensitive information anonymized.
+    
+    """
     if 'httpd' in filename:
         line = re.sub(httpd_pattern, anonymize_user_id_httpd_sshd, line)
     elif 'sshd' in filename:
         line = re.sub(sshd_pattern, anonymize_user_id_httpd_sshd, line)
+    elif 'ha' in filename:
+        line = re.sub(ha_proxy_pattern, anonymize_sensitive_info_ha, line)
     else:
-        line = re.sub(user_id_pattern_general, anonymize_user_id_general, line)
+        line = re.sub(user_id_pattern, anonymize_user_id_general, line)
 
     return line.rstrip() + '\n'
 
 def anonymize_endpoint_general(match):
+    """
+    Takes a regex match, representing a line in any type of log file.
+    Returns the anonymized endpoint.
+    
+    """
     original_endpoint = match.group(0)
     parts = original_endpoint.strip('/').split('/')
     anonymized_parts = []
@@ -95,6 +196,11 @@ def anonymize_endpoint_general(match):
     return anonymized_endpoint
 
 def anonymize_endpoint_httpd(match):
+    """
+    Takes a regex match, representing a line in an HTTP log file.
+    Returns the anonymized endpoint.
+    
+    """
     original_endpoint = match.group(6)
     parts = original_endpoint.strip('/').split('/')
     anonymized_parts = []
@@ -114,6 +220,11 @@ def anonymize_endpoint_httpd(match):
     return ''.join([match.string[:match.start(6)], anonymized_endpoint, match.string[match.end(6):]])
 
 def anonymize_endpoint_sshd(match):
+    """
+    Takes a regex match, representing a line in an SSH log file.
+    Returns the anonymized endpoint.
+    
+    """
     original_endpoint = match.group(5)
     parts = original_endpoint.split(' ', 1)
     endpoint_part = parts[0].strip('/').split('/')
@@ -140,16 +251,73 @@ def anonymize_endpoint_sshd(match):
     anonymized_endpoint += ' ' + remaining_string if remaining_string else ''
     return ''.join([match.string[:match.start(5)], anonymized_endpoint, match.string[match.end(5):]])
 
+def anonymize_endpoint_ha(match):
+    """
+    Takes a regex match, representing a line in an HA Proxy log file.
+    Returns a line with all of the endpoints anonymized.
+
+    """
+    original_endpoint = match.group(9)
+    parts = original_endpoint.strip('/').split('/')
+    anonymized_parts = []
+    for part in parts:
+        if part in lookup_table:
+            anonymized_part = lookup_table[part]
+        else: 
+            anonymized_part = namesgenerator.get_random_name()
+            lookup_table[part] = anonymized_part
+        anonymized_parts.append(anonymized_part)
+
+    if original_endpoint.startswith('/'):
+        anonymized_endpoint = '/' + '/'.join(anonymized_parts)
+    else:
+        anonymized_endpoint = '/'.join(anonymized_parts)
+
+    return_string =  ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):]])
+
+    if match.group(21) != None:
+        original_endpoint2 = match.group(21)
+        parts2 = original_endpoint2.strip('/').split('/')
+        anonymized_parts2 = []
+        for part2 in parts2:
+            if part2 in lookup_table:
+                anonymized_part = lookup_table[part2]
+            else: 
+                anonymized_part = namesgenerator.get_random_name()
+                lookup_table[part2] = anonymized_part
+            anonymized_parts2.append(anonymized_part)
+
+        if original_endpoint2.startswith('/'):
+            anonymized_endpoint2 = '/' + '/'.join(anonymized_parts2)
+        else:
+            anonymized_endpoint2 = '/'.join(anonymized_parts2)
+        return_string = ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):match.start(21)], anonymized_endpoint2, match.string[match.end(21):]])
+
+    return return_string
+
 def anonymize_endpoint_line(line, filename):
+    """
+    Takes a specific line from a file and its filename. 
+    Returns the line with all of the endpoints anonymized.
+    
+    """
     if 'httpd' in filename:
         line = re.sub(httpd_pattern, anonymize_endpoint_httpd, line)
     elif 'sshd' in filename:
         line = re.sub(sshd_pattern, anonymize_endpoint_sshd, line)
+    elif 'ha' in filename:
+        line = re.sub(ha_proxy_pattern, anonymize_endpoint_ha, line)
     else:
-        line = re.sub(endpoint_pattern_general, anonymize_endpoint_general, line)
+        line = re.sub(endpoint_pattern, anonymize_endpoint_general, line)
     return line.rstrip() + '\n'
 
 def randomize_numbers(number, is_ip_address = False):
+    """
+    Takes a number and a flag to indicate if the given number is part of an IP address.
+    Returns a random number that has the same length as the original one. If the number is part of an IP address,
+    the function will return a random number between 0 and 255 (inclusive)
+
+    """
     num_len = len(str(number))
     lower_bound = 10**(num_len - 1)
     if (is_ip_address):
@@ -173,12 +341,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    base_directory = args.input_directory #'./logs/seroius03161/archive_log'
-    output_directory = args.output_directory #'./logs/anonymized_logs2'
+    base_directory = args.input_directory 
+    output_directory = args.output_directory
     os.makedirs(output_directory, exist_ok=True)
 
     for filename in os.listdir(base_directory):
-        if not filename.endswith(tuple(exclude_extensions)):
+        if not filename.endswith(tuple(files_to_exclude)):
             input_file_path = os.path.join(base_directory, filename)
             output_file_path = os.path.join(output_directory, f'anonymized_{filename}')
             lookup_file_path = os.path.join(output_directory, f'lookup_table_{filename}.txt')
@@ -187,7 +355,7 @@ if __name__ == "__main__":
             with open(input_file_path, 'r') as input_file, open(output_file_path, 'w') as output_file:
                 for line in input_file:
                     if args.ip:
-                        line = re.sub(ip_pattern, anonymize_ip, line)
+                        line = anonymize_ip_line(line, filename)
                     if args.endpoint:
                         line = anonymize_endpoint_line(line, filename)
                     if args.user:
@@ -195,14 +363,15 @@ if __name__ == "__main__":
                     if args.timestamps:
                         line = re.sub(timestamps, anonymize_timestamps, line)
                     if not (args.ip or args.timestamps or args.endpoint or args.user):
-                        line = re.sub(ip_pattern, anonymize_ip, line)
+                        line = anonymize_ip_line(line, filename)
                         line = anonymize_endpoint_line(line, filename)
                         line = anonymize_user_line(line, filename)
+                    
                     output_file.write(line)
                     
             with open(lookup_file_path, 'w') as lookup_file:
-                for original_endpoint, anonymized_endpoint in lookup_table.items():
-                    lookup_file.write(f'{anonymized_endpoint} -> {original_endpoint}\n')
+                for original_data, anonymized_data in lookup_table.items():
+                    lookup_file.write(f'{anonymized_data} -> {original_data}\n')
 
             print(f'Logs in {filename} anonymized and saved to {output_file_path}')
             print(f'Lookup table for {filename} saved to {lookup_file_path} \n')
