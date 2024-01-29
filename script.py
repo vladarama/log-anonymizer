@@ -95,6 +95,19 @@ def anonymize_timestamps(match):
 
     return anonymized_ip
 
+def anonymize_user_id(user_id):
+    """
+    Takes a user id or any sensitive name and anonymizes it.
+
+    """
+    if user_id in lookup_table:
+        anonymized_user_id = lookup_table[user_id]
+    else:
+        anonymized_user_id = namesgenerator.get_random_name()
+        lookup_table[user_id] = anonymized_user_id
+    
+    return anonymized_user_id
+    
 def anonymize_user_id_general(match):
     """
     Takes a regex match, representing a line in any type of log file.
@@ -102,11 +115,7 @@ def anonymize_user_id_general(match):
 
     """
     original_user_id = match.group(0)
-    if original_user_id in lookup_table:
-        anonymized_user_id = lookup_table[original_user_id]
-    else:
-        anonymized_user_id = namesgenerator.get_random_name()
-        lookup_table[original_user_id] = anonymized_user_id
+    anonymized_user_id = anonymize_user_id(original_user_id)
 
     return ' ' + anonymized_user_id + ' ' 
 
@@ -116,16 +125,12 @@ def anonymize_user_id_httpd_sshd(match):
     Returns a line with all of the user information anonymized.
 
     """
-    original_user = match.group(3)
-    if original_user == '-':
+    original_user_id = match.group(3)
+    if original_user_id == '-':
         return match.group(0)
-    elif original_user in lookup_table:
-        anonymized_user = lookup_table[original_user]
-    else:
-        anonymized_user = namesgenerator.get_random_name()
-        lookup_table[original_user] = anonymized_user
+    anonymized_user_id = anonymize_user_id(original_user_id)
 
-    return ''.join([match.string[:match.start(3)], anonymized_user, match.string[match.end(3):]])
+    return ''.join([match.string[:match.start(3)], anonymized_user_id, match.string[match.end(3):]])
 
 def anonymize_sensitive_info_ha(match):
     """
@@ -139,18 +144,8 @@ def anonymize_sensitive_info_ha(match):
 
     original_info1 = match.group(18)
     original_info2 = match.group(19)
-
-    if original_info1 in lookup_table:
-        anonymized_info1 = lookup_table[original_info1]
-    else:
-        anonymized_info1 = namesgenerator.get_random_name()
-        lookup_table[original_info1] = anonymized_info1
-
-    if original_info2 in lookup_table:
-        anonymized_info2 = lookup_table[original_info2]
-    else:
-        anonymized_info2 = namesgenerator.get_random_name()
-        lookup_table[original_info2] = anonymized_info2
+    anonymized_info1 = anonymize_user_id(original_info1)
+    anonymized_info2 = anonymize_user_id(original_info2)
 
     return ''.join([match.string[:match.start(18)], anonymized_info1, match.string[match.end(18):match.start(19)], anonymized_info2, match.string[match.end(19):]])
 
@@ -171,16 +166,14 @@ def anonymize_user_line(line, filename):
 
     return line.rstrip() + '\n'
 
-def anonymize_endpoint_general(match):
+def anonymize_endpoint(original_endpoint):
     """
-    Takes a regex match, representing a line in any type of log file.
-    Returns the anonymized endpoint.
-    
+    Takes an endpoint and returns its anonymized version.
+
     """
-    original_endpoint = match.group(0)
-    parts = original_endpoint.strip('/').split('/')
+    endpoint_parts = original_endpoint.strip('/').split('/')
     anonymized_parts = []
-    for part in parts:
+    for part in endpoint_parts:
         if part in lookup_table:
             anonymized_part = lookup_table[part]
         else: 
@@ -195,6 +188,15 @@ def anonymize_endpoint_general(match):
 
     return anonymized_endpoint
 
+def anonymize_endpoint_general(match):
+    """
+    Takes a regex match, representing a line in any type of log file.
+    Returns the anonymized endpoint.
+    
+    """
+    original_endpoint = match.group(0)
+    return anonymize_endpoint(original_endpoint)
+
 def anonymize_endpoint_httpd(match):
     """
     Takes a regex match, representing a line in an HTTP log file.
@@ -202,20 +204,7 @@ def anonymize_endpoint_httpd(match):
     
     """
     original_endpoint = match.group(6)
-    parts = original_endpoint.strip('/').split('/')
-    anonymized_parts = []
-    for part in parts:
-        if part in lookup_table:
-            anonymized_part = lookup_table[part]
-        else: 
-            anonymized_part = namesgenerator.get_random_name()
-            lookup_table[part] = anonymized_part
-        anonymized_parts.append(anonymized_part)
-
-    if original_endpoint.startswith('/'):
-        anonymized_endpoint = '/' + '/'.join(anonymized_parts)
-    else:
-        anonymized_endpoint = '/'.join(anonymized_parts)
+    anonymized_endpoint = anonymize_endpoint(original_endpoint)
 
     return ''.join([match.string[:match.start(6)], anonymized_endpoint, match.string[match.end(6):]])
 
@@ -230,25 +219,12 @@ def anonymize_endpoint_sshd(match):
     endpoint_part = parts[0].strip('/').split('/')
     remaining_string = parts[1] if len(parts) > 1 else ''
 
-    anonymized_parts = []
     if len(endpoint_part) < 2:
         return match.group(0)
 
-    for part in endpoint_part:
-        if part in lookup_table:
-            anonymized_part = lookup_table[part]
-        else: 
-            anonymized_part = namesgenerator.get_random_name()
-            lookup_table[part] = anonymized_part
-
-        anonymized_parts.append(anonymized_part)
-
-    if original_endpoint.startswith('/'):
-        anonymized_endpoint = '/' + '/'.join(anonymized_parts)
-    else:
-        anonymized_endpoint = '/'.join(anonymized_parts)
-
+    anonymized_endpoint = anonymize_endpoint(original_endpoint)
     anonymized_endpoint += ' ' + remaining_string if remaining_string else ''
+
     return ''.join([match.string[:match.start(5)], anonymized_endpoint, match.string[match.end(5):]])
 
 def anonymize_endpoint_ha(match):
@@ -258,42 +234,15 @@ def anonymize_endpoint_ha(match):
 
     """
     original_endpoint = match.group(9)
-    parts = original_endpoint.strip('/').split('/')
-    anonymized_parts = []
-    for part in parts:
-        if part in lookup_table:
-            anonymized_part = lookup_table[part]
-        else: 
-            anonymized_part = namesgenerator.get_random_name()
-            lookup_table[part] = anonymized_part
-        anonymized_parts.append(anonymized_part)
-
-    if original_endpoint.startswith('/'):
-        anonymized_endpoint = '/' + '/'.join(anonymized_parts)
-    else:
-        anonymized_endpoint = '/'.join(anonymized_parts)
-
-    return_string =  ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):]])
+    anonymized_endpoint = anonymize_endpoint(original_endpoint)
+    anonymized_line =  ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):]])
 
     if match.group(21) != None:
         original_endpoint2 = match.group(21)
-        parts2 = original_endpoint2.strip('/').split('/')
-        anonymized_parts2 = []
-        for part2 in parts2:
-            if part2 in lookup_table:
-                anonymized_part = lookup_table[part2]
-            else: 
-                anonymized_part = namesgenerator.get_random_name()
-                lookup_table[part2] = anonymized_part
-            anonymized_parts2.append(anonymized_part)
+        anonymized_endpoint2 = anonymize_endpoint(original_endpoint2)
+        anonymized_line = ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):match.start(21)], anonymized_endpoint2, match.string[match.end(21):]])
 
-        if original_endpoint2.startswith('/'):
-            anonymized_endpoint2 = '/' + '/'.join(anonymized_parts2)
-        else:
-            anonymized_endpoint2 = '/'.join(anonymized_parts2)
-        return_string = ''.join([match.string[:match.start(9)], anonymized_endpoint, match.string[match.end(9):match.start(21)], anonymized_endpoint2, match.string[match.end(21):]])
-
-    return return_string
+    return anonymized_line
 
 def anonymize_endpoint_line(line, filename):
     """
