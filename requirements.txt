@@ -1,1 +1,2 @@
 namesgenerator==0.3
+tqdm==4.64.0

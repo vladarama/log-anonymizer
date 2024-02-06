@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 """
 Log Anonymizer
 
@@ -8,6 +10,7 @@ import random
 import re
 import argparse
 import namesgenerator
+import tqdm
 
 __author__ = "Vlad Arama"
 __copyright__ = "Copyright 2024, Ericsson"
@@ -354,6 +357,15 @@ def randomize_numbers(number, is_ip_address:bool=False)->str:
     return random.randint(lower_bound, upper_bound)
 
 
+def count_lines(file_path:str)->int:
+    c = 0
+    with open(file_path) as file:
+        while True:
+            chunk = file.read(10 ** 7)
+            if chunk == "":
+                return c
+            c += chunk.count("\n")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Anonymize log files. Anonymized files and their lookup tables are storedd in the `anonymized-logs` folder"
@@ -383,27 +395,27 @@ if __name__ == "__main__":
     output_directory = args.output_directory
     os.makedirs(output_directory, exist_ok=True)
 
-    for file_name in os.listdir(base_directory):
-        if not file_name.lower().endswith(tuple(FILES_TO_EXCLUDE)):
-            input_file_path = os.path.join(base_directory, file_name)
-            output_file_path = os.path.join(output_directory, f"anonymized_{file_name}")
+    for input_file_path in tqdm.tqdm(os.listdir(base_directory), unit=' Files'):
+        if not input_file_path.lower().endswith(tuple(FILES_TO_EXCLUDE)):
+            input_file_path = os.path.join(base_directory, input_file_path)
+            output_file_path = os.path.join(output_directory, f"anonymized_{input_file_path}")
             lookup_file_path = os.path.join(
-                output_directory, f"lookup_table_{file_name}.txt"
+                output_directory, f"lookup_table_{input_file_path}.txt"
             )
             lookup_table = {}
-
+            line_count = count_lines(file_path=input_file_path)
             with open(
                 file=input_file_path, mode="r", encoding="utf-8"
             ) as input_file, open(
                 file=output_file_path, mode="w", encoding="utf-8"
             ) as output_file:
-                for current_line in input_file:
+                for current_line in tqdm.tqdm(iterable=input_file,unit=' Lines', total=line_count):
                     if args.ip:
-                        current_line = anonymize_ip_line(current_line, file_name)
+                        current_line = anonymize_ip_line(current_line, input_file_path)
                     if args.endpoint:
-                        current_line = anonymize_endpoint_line(current_line, file_name)
+                        current_line = anonymize_endpoint_line(current_line, input_file_path)
                     if args.user:
-                        current_line = anonymize_user_line(current_line, file_name)
+                        current_line = anonymize_user_line(current_line, input_file_path)
                     if args.timestamps:
                         re_match = re.match(TIMESTAMP_PATTERN, current_line)
                         if re_match:
@@ -411,9 +423,9 @@ if __name__ == "__main__":
                             if new_ts:
                                 current_line = re.sub(TIMESTAMP_PATTERN, new_ts, current_line)
                     if not (args.ip or args.timestamps or args.endpoint or args.user):
-                        current_line = anonymize_ip_line(current_line, file_name)
-                        current_line = anonymize_endpoint_line(current_line, file_name)
-                        current_line = anonymize_user_line(current_line, file_name)
+                        current_line = anonymize_ip_line(current_line, input_file_path)
+                        current_line = anonymize_endpoint_line(current_line, input_file_path)
+                        current_line = anonymize_user_line(current_line, input_file_path)
 
                     output_file.write(current_line)
 
@@ -421,5 +433,5 @@ if __name__ == "__main__":
                 for original_data, anonymized_data in lookup_table.items():
                     lookup_file.write(f"{anonymized_data} -> {original_data}\n")
 
-            print(f"Logs in {file_name} anonymized and saved to {output_file_path}")
-            print(f"Lookup table for {file_name} saved to {lookup_file_path} \n")
+            print(f"Logs in {input_file_path} anonymized and saved to {output_file_path}")
+            print(f"Lookup table for {input_file_path} saved to {lookup_file_path} \n")
