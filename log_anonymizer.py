@@ -3,6 +3,7 @@ Log Anonymizer
 
 Anonymizes log timestamp, IPs and endpoints.
 """
+
 import os
 import random
 import re
@@ -119,7 +120,7 @@ def anonymize_timestamps(matched_pattern) -> str:
     return anonymized_ip
 
 
-def anonymize_user_id(user_id:str) ->str:
+def anonymize_user_id(user_id: str) -> str:
     """
     Takes a user id or any sensitive name and anonymizes it.
 
@@ -133,7 +134,7 @@ def anonymize_user_id(user_id:str) ->str:
     return anonymized_user_id
 
 
-def anonymize_user_id_general(matched_pattern:str)->str:
+def anonymize_user_id_general(matched_pattern: str) -> str:
     """
     Takes a regex match, representing a line in any type of log file.
     Returns a randomly generated user id.
@@ -145,7 +146,7 @@ def anonymize_user_id_general(matched_pattern:str)->str:
     return " " + anonymized_user_id + " "
 
 
-def anonymize_user_id_httpd_sshd(matched_pattern)->str:
+def anonymize_user_id_httpd_sshd(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an HTTP or SSH log file.
     Returns a line with all of the user information anonymized.
@@ -164,7 +165,8 @@ def anonymize_user_id_httpd_sshd(matched_pattern)->str:
         ]
     )
 
-def anonymize_referer(matched_pattern)->str:
+
+def anonymize_referer(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an HTTP log file.
     Returns a line with all of the referer information anonymized.
@@ -183,7 +185,8 @@ def anonymize_referer(matched_pattern)->str:
         ]
     )
 
-def anonymize_user_agent(matched_pattern)->str:
+
+def anonymize_user_agent(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an HTTP log file.
     Returns a line with all of the user agent information anonymized.
@@ -203,7 +206,7 @@ def anonymize_user_agent(matched_pattern)->str:
     )
 
 
-def anonymize_sensitive_info_ha(matched_pattern)->str:
+def anonymize_sensitive_info_ha(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an HA Proxy log file.
     Returns a line with all of the sensitive information anonymized.
@@ -229,7 +232,7 @@ def anonymize_sensitive_info_ha(matched_pattern)->str:
     )
 
 
-def anonymize_user_line(line:str, filename:str)->str:
+def anonymize_user_line(line: str, filename: str) -> str:
     """
     Takes a specific line from a file and its filename.
     Returns the line with all of the user information and sensitive information anonymized.
@@ -249,7 +252,7 @@ def anonymize_user_line(line:str, filename:str)->str:
     return line.rstrip() + "\n"
 
 
-def anonymize_endpoint(original_endpoint)->str:
+def anonymize_endpoint(original_endpoint) -> str:
     """
     Takes an endpoint and returns its anonymized version.
 
@@ -272,7 +275,7 @@ def anonymize_endpoint(original_endpoint)->str:
     return anonymized_endpoint
 
 
-def anonymize_endpoint_general(match)->str:
+def anonymize_endpoint_general(match) -> str:
     """
     Takes a regex match, representing a line in any type of log file.
     Returns the anonymized endpoint.
@@ -282,7 +285,7 @@ def anonymize_endpoint_general(match)->str:
     return anonymize_endpoint(original_endpoint)
 
 
-def anonymize_endpoint_httpd(match)->str:
+def anonymize_endpoint_httpd(match) -> str:
     """
     Takes a regex match, representing a line in an HTTP log file.
     Returns the anonymized endpoint.
@@ -300,7 +303,7 @@ def anonymize_endpoint_httpd(match)->str:
     )
 
 
-def anonymize_endpoint_sshd(match)->str:
+def anonymize_endpoint_sshd(match) -> str:
     """
     Takes a regex match, representing a line in an SSH log file.
     Returns the anonymized endpoint.
@@ -326,7 +329,7 @@ def anonymize_endpoint_sshd(match)->str:
     )
 
 
-def anonymize_endpoint_ha(match)->str:
+def anonymize_endpoint_ha(match) -> str:
     """
     Takes a regex match, representing a line in an HA Proxy log file.
     Returns a line with all of the endpoints anonymized.
@@ -358,7 +361,7 @@ def anonymize_endpoint_ha(match)->str:
     return anonymized_line
 
 
-def anonymize_endpoint_line(line, filename)->str:
+def anonymize_endpoint_line(line, filename) -> str:
     """
     Takes a specific line from a file and its filename.
     Returns the line with all of the endpoints anonymized.
@@ -375,7 +378,7 @@ def anonymize_endpoint_line(line, filename)->str:
     return line.rstrip() + "\n"
 
 
-def randomize_numbers(number, is_ip_address:bool=False)->str:
+def randomize_numbers(number, is_ip_address: bool = False) -> str:
     """
     Takes a number and a flag to indicate if the given number is part of an IP address.
     Returns a random number that has the same length as the original one. If the number is part of an IP address,
@@ -449,7 +452,9 @@ if __name__ == "__main__":
                         if re_match:
                             new_ts = anonymize_timestamps(re_match)
                             if new_ts:
-                                current_line = re.sub(TIMESTAMP_PATTERN, new_ts, current_line)
+                                current_line = re.sub(
+                                    TIMESTAMP_PATTERN, new_ts, current_line
+                                )
                     if not (args.ip or args.timestamps or args.endpoint or args.user):
                         current_line = anonymize_ip_line(current_line, file_name)
                         current_line = anonymize_endpoint_line(current_line, file_name)
