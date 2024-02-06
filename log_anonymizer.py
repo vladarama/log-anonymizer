@@ -164,6 +164,44 @@ def anonymize_user_id_httpd_sshd(matched_pattern)->str:
         ]
     )
 
+def anonymize_referer(matched_pattern)->str:
+    """
+    Takes a regex match, representing a line in an HTTP log file.
+    Returns a line with all of the referer information anonymized.
+
+    """
+    original_referer = matched_pattern.group(10)
+    if original_referer == "-":
+        return matched_pattern.group(0)
+    anonymized_referer = anonymize_user_id(original_referer)
+
+    return "".join(
+        [
+            matched_pattern.string[: matched_pattern.start(10)],
+            f'"{anonymized_referer}"',
+            matched_pattern.string[matched_pattern.end(10) :],
+        ]
+    )
+
+def anonymize_user_agent(matched_pattern)->str:
+    """
+    Takes a regex match, representing a line in an HTTP log file.
+    Returns a line with all of the user agent information anonymized.
+
+    """
+    original_user_agent = matched_pattern.group(11)
+    if original_user_agent == "-":
+        return matched_pattern.group(0)
+    anonymized_user_agent = anonymize_user_id(original_user_agent)
+
+    return "".join(
+        [
+            matched_pattern.string[: matched_pattern.start(11)],
+            anonymized_user_agent,
+            matched_pattern.string[matched_pattern.end(11) :],
+        ]
+    )
+
 
 def anonymize_sensitive_info_ha(matched_pattern)->str:
     """
@@ -199,6 +237,8 @@ def anonymize_user_line(line:str, filename:str)->str:
     """
     if "httpd" in filename:
         line = re.sub(HTTPD_PATTERN, anonymize_user_id_httpd_sshd, line)
+        line = re.sub(HTTPD_PATTERN, anonymize_referer, line)
+        line = re.sub(HTTPD_PATTERN, anonymize_user_agent, line)
     elif "sshd" in filename:
         line = re.sub(SSHD_PATTERN, anonymize_user_id_httpd_sshd, line)
     elif "ha" in filename:
