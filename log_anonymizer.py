@@ -204,6 +204,62 @@ def anonymize_user_agent(matched_pattern) -> str:
         ]
     )
 
+def anonymize_command_ssh(matched_pattern) -> str:
+    """
+    Takes a regex match, representing a line in an SSH log file.
+    Returns a line with all of the command sensitive information anonymized.
+
+    """
+    original_command = matched_pattern.group(16)
+    if not(original_command):
+        return matched_pattern.group(0)
+    anonymized_command = anonymize_user_id(original_command)
+
+    return "".join(
+        [
+            matched_pattern.string[: matched_pattern.start(16)],
+            anonymized_command,
+            matched_pattern.string[matched_pattern.end(16) :],
+        ]
+    )
+
+def anonymize_return_ssh(matched_pattern) -> str:
+    """
+    Takes a regex match, representing a line in an SSH log file.
+    Returns a line with all of the return values anonymized.
+
+    """
+    original_return_value = matched_pattern.group(19)
+    if not(original_return_value):
+        return matched_pattern.group(0)
+    anonymized_return_value = anonymize_user_id(original_return_value)
+
+    return "".join(
+        [
+            matched_pattern.string[: matched_pattern.start(19)],
+            anonymized_return_value,
+            matched_pattern.string[matched_pattern.end(19) :],
+        ]
+    )
+
+def anonymize_sensitive_info_ssh(matched_pattern) -> str:
+    """
+    Takes a regex match, representing a line in an SSH log file.
+    Returns a line with all of the sensitive information anonymized.
+
+    """
+    original_info = matched_pattern.group(4)
+    if not(original_info):
+        return matched_pattern.group(0)
+    anonymized_info = anonymize_user_id(original_info)
+
+    return "".join(
+        [
+            matched_pattern.string[: matched_pattern.start(4)],
+            anonymized_info,
+            matched_pattern.string[matched_pattern.end(4) :],
+        ]
+    )
 
 def anonymize_sensitive_info_ha(matched_pattern) -> str:
     """
@@ -235,18 +291,27 @@ def anonymize_user_line(line: str, filename: str) -> str:
     """
     Takes a specific line from a file and its filename.
     Returns the line with all of the user information and sensitive information anonymized.
+    If no substitutions are made (i.e., the pattern is not found in the line), returns "" to indicate the line should be skipped.
 
     """
+    original_line = line
+
     if "httpd" in filename:
         line = re.sub(HTTPD_PATTERN, anonymize_user_id_httpd_sshd, line)
         line = re.sub(HTTPD_PATTERN, anonymize_referer, line)
         line = re.sub(HTTPD_PATTERN, anonymize_user_agent, line)
     elif "sshd" in filename:
         line = re.sub(SSHD_PATTERN, anonymize_user_id_httpd_sshd, line)
+        line = re.sub(SSHD_PATTERN, anonymize_command_ssh, line)
+        line = re.sub(SSHD_PATTERN, anonymize_return_ssh, line)
+        line = re.sub(SSHD_PATTERN, anonymize_sensitive_info_ssh, line)
     elif "ha" in filename:
         line = re.sub(HA_PROXY_PATTERN, anonymize_sensitive_info_ha, line)
     else:
         line = re.sub(USER_ID_PATTERN, anonymize_user_id_general, line)
+
+    if line == original_line:
+        return ""
 
     return line.rstrip() + "\n"
 
