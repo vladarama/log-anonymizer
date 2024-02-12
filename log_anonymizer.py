@@ -204,6 +204,7 @@ def anonymize_user_agent(matched_pattern) -> str:
         ]
     )
 
+
 def anonymize_command_ssh(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an SSH log file.
@@ -211,7 +212,7 @@ def anonymize_command_ssh(matched_pattern) -> str:
 
     """
     original_command = matched_pattern.group(16)
-    if not(original_command):
+    if not (original_command):
         return matched_pattern.group(0)
     anonymized_command = anonymize_user_id(original_command)
 
@@ -223,6 +224,7 @@ def anonymize_command_ssh(matched_pattern) -> str:
         ]
     )
 
+
 def anonymize_return_ssh(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an SSH log file.
@@ -230,7 +232,7 @@ def anonymize_return_ssh(matched_pattern) -> str:
 
     """
     original_return_value = matched_pattern.group(19)
-    if not(original_return_value):
+    if not (original_return_value):
         return matched_pattern.group(0)
     anonymized_return_value = anonymize_user_id(original_return_value)
 
@@ -242,6 +244,7 @@ def anonymize_return_ssh(matched_pattern) -> str:
         ]
     )
 
+
 def anonymize_sensitive_info_ssh(matched_pattern) -> str:
     """
     Takes a regex match, representing a line in an SSH log file.
@@ -249,7 +252,7 @@ def anonymize_sensitive_info_ssh(matched_pattern) -> str:
 
     """
     original_info = matched_pattern.group(4)
-    if not(original_info):
+    if not (original_info):
         return matched_pattern.group(0)
     anonymized_info = anonymize_user_id(original_info)
 
@@ -260,6 +263,7 @@ def anonymize_sensitive_info_ssh(matched_pattern) -> str:
             matched_pattern.string[matched_pattern.end(4) :],
         ]
     )
+
 
 def anonymize_sensitive_info_ha(matched_pattern) -> str:
     """
@@ -294,23 +298,33 @@ def anonymize_user_line(line: str, filename: str) -> str:
     If no substitutions are made (i.e., the pattern is not found in the line), returns "" to indicate the line should be skipped.
 
     """
-    original_line = line
+    substitutions_count = 0  # Keep track of the number of substitutions made
 
     if "httpd" in filename:
-        line = re.sub(HTTPD_PATTERN, anonymize_user_id_httpd_sshd, line)
-        line = re.sub(HTTPD_PATTERN, anonymize_referer, line)
-        line = re.sub(HTTPD_PATTERN, anonymize_user_agent, line)
+        patterns = [
+            (HTTPD_PATTERN, anonymize_user_id_httpd_sshd),
+            (HTTPD_PATTERN, anonymize_referer),
+            (HTTPD_PATTERN, anonymize_user_agent),
+        ]
     elif "sshd" in filename:
-        line = re.sub(SSHD_PATTERN, anonymize_user_id_httpd_sshd, line)
-        line = re.sub(SSHD_PATTERN, anonymize_command_ssh, line)
-        line = re.sub(SSHD_PATTERN, anonymize_return_ssh, line)
-        line = re.sub(SSHD_PATTERN, anonymize_sensitive_info_ssh, line)
+        patterns = [
+            (SSHD_PATTERN, anonymize_user_id_httpd_sshd),
+            (SSHD_PATTERN, anonymize_command_ssh),
+            (SSHD_PATTERN, anonymize_return_ssh),
+            (SSHD_PATTERN, anonymize_sensitive_info_ssh),
+        ]
     elif "ha" in filename:
-        line = re.sub(HA_PROXY_PATTERN, anonymize_sensitive_info_ha, line)
+        patterns = [(HA_PROXY_PATTERN, anonymize_sensitive_info_ha)]
     else:
-        line = re.sub(USER_ID_PATTERN, anonymize_user_id_general, line)
+        patterns = [(USER_ID_PATTERN, anonymize_user_id_general)]
 
-    if line == original_line:
+    for pattern, func in patterns:
+        new_line, count = re.subn(pattern, func, line)
+        if count > 0:
+            line = new_line
+            substitutions_count += count
+
+    if substitutions_count == 0:
         return ""
 
     return line.rstrip() + "\n"
