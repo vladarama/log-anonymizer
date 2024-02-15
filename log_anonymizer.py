@@ -22,7 +22,7 @@ USER_ID_PATTERN = r"\s[a-z][a-z0-9]{4,19}\s"
 
 # Specific Regex Patterns
 HTTPD_PATTERN = r"\s*(\S+)\s*(\S*)\s*\-\s(\S+)\s\[(\S+\s*\S+)\]\s\"(\S+)\s+(\S+)\s(\S+)\"\s(\d+)\s(\S+)\s(\S+)\s\"(.*)\""
-SSHD_PATTERN = r"\[(\d.*)\]\s+(\S+)\s+(\S+)\s+(\S+)\s+((([A-Z]+)\sFROM\s+(.*))|(([A-Z]+))|((AUTH FAILURE)\sFROM\s(\S+)\s(.*))|((.+)\s+(\S+)\s+(\S+)\s+(\S+)))"
+SSHD_PATTERN = r"\[(\d.*)\]\s+(\S+)\s+(\S+)\s+(\S+)\s+((([A-Z]+)\sFROM\s+(.*))|((AUTH FAILURE)\sFROM\s(\S+)\s(.*))|((.+)\s+(\S+)\s+(\S+)\s+(\S+))|(([A-Z]+)))"
 HA_PROXY_PATTERN = r'^(\w+ \d+ \S+) (\S+) (\S+)\[(\d+)\]: (\S+):(\d+) \[(\S+)\] (\S+) (\S+) (\S+) (\S+) (\S+) *(\S+) (\S+) (\S+)(?: (\S+) (\S+) \{([^}]*)\} \{([^}]*)\} "(\S+) ([^"]+) (\S+)")? *$'
 
 FILES_TO_EXCLUDE = [".gz", ".md5", ".sha1", ".sha256", ".zip"]
@@ -211,16 +211,16 @@ def anonymize_command_ssh(matched_pattern) -> str:
     Returns a line with all of the command sensitive information anonymized.
 
     """
-    original_command = matched_pattern.group(16)
+    original_command = matched_pattern.group(14)
     if not (original_command):
         return matched_pattern.group(0)
     anonymized_command = anonymize_user_id(original_command)
 
     return "".join(
         [
-            matched_pattern.string[: matched_pattern.start(16)],
+            matched_pattern.string[: matched_pattern.start(14)],
             anonymized_command,
-            matched_pattern.string[matched_pattern.end(16) :],
+            matched_pattern.string[matched_pattern.end(14) :],
         ]
     )
 
@@ -231,16 +231,16 @@ def anonymize_return_ssh(matched_pattern) -> str:
     Returns a line with all of the return values anonymized.
 
     """
-    original_return_value = matched_pattern.group(19)
+    original_return_value = matched_pattern.group(17)
     if not (original_return_value):
         return matched_pattern.group(0)
     anonymized_return_value = anonymize_user_id(original_return_value)
 
     return "".join(
         [
-            matched_pattern.string[: matched_pattern.start(19)],
+            matched_pattern.string[: matched_pattern.start(17)],
             anonymized_return_value,
-            matched_pattern.string[matched_pattern.end(19) :],
+            matched_pattern.string[matched_pattern.end(17) :],
         ]
     )
 
