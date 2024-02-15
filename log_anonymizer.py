@@ -127,7 +127,13 @@ def anonymize_user_id(user_id: str) -> str:
     if user_id in lookup_table:
         anonymized_user_id = lookup_table[user_id]
     else:
-        anonymized_user_id = namesgenerator.get_random_name()
+        anonymized_user_id = (
+            f"{namesgenerator.get_random_name()}_{namesgenerator.get_random_name()}"
+        )
+        while anonymized_user_id in lookup_table.values():
+            anonymized_user_id = (
+            f"{namesgenerator.get_random_name()}_{namesgenerator.get_random_name()}"
+        )
         lookup_table[user_id] = anonymized_user_id
 
     return anonymized_user_id
@@ -338,11 +344,7 @@ def anonymize_endpoint(original_endpoint) -> str:
     endpoint_parts = original_endpoint.strip("/").split("/")
     anonymized_parts = []
     for part in endpoint_parts:
-        if part in lookup_table:
-            anonymized_part = lookup_table[part]
-        else:
-            anonymized_part = namesgenerator.get_random_name()
-            lookup_table[part] = anonymized_part
+        anonymized_part = anonymize_user_id(part)
         anonymized_parts.append(anonymized_part)
 
     if original_endpoint.startswith("/"):
