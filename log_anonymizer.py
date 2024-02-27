@@ -132,8 +132,8 @@ def anonymize_user_id(user_id: str) -> str:
         )
         while anonymized_user_id in lookup_table.values():
             anonymized_user_id = (
-            f"{namesgenerator.get_random_name()}_{namesgenerator.get_random_name()}"
-        )
+                f"{namesgenerator.get_random_name()}_{namesgenerator.get_random_name()}"
+            )
         lookup_table[user_id] = anonymized_user_id
 
     return anonymized_user_id
@@ -220,8 +220,28 @@ def anonymize_command_ssh(matched_pattern) -> str:
     original_command = matched_pattern.group(14)
     if not (original_command):
         return matched_pattern.group(0)
-    anonymized_command = anonymize_user_id(original_command)
 
+    # Check if the command contains only anonymized endpoints (no need to reanonymize)
+    original_endpoint_count = 0
+    splitted_endpoints = original_command.strip("/").split("/")
+    if len(splitted_endpoints) >= 2:
+        for endpoint in splitted_endpoints:
+            if endpoint not in lookup_table.values():
+                original_endpoint_count += 1
+                if original_endpoint_count >= 2:
+                    # The command contains non-anonymized endpoints (we need to reanonymize)
+                    anonymized_command = anonymize_user_id(original_command)
+                    return "".join(
+                        [
+                            matched_pattern.string[: matched_pattern.start(14)],
+                            anonymized_command,
+                            matched_pattern.string[matched_pattern.end(14) :],
+                        ]
+                    )
+        return matched_pattern.group(0)
+
+    # Normal command anonymization
+    anonymized_command = anonymize_user_id(original_command)
     return "".join(
         [
             matched_pattern.string[: matched_pattern.start(14)],
